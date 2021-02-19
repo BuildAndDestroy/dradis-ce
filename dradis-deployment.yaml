@@ -1,0 +1,118 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dradis-ns
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: myregistrykey
+  namespace: dradis-ns
+data:
+  .dockerconfigjson: {{ cat ~/.docker/config.json | base64 }}
+type: kubernetes.io/dockerconfigjson
+---
+apiVersion: v1
+data:
+  tls.crt: {{ cat tls.crt | base64 }}
+  tls.key: {{ cat tls.key | base64 }}
+kind: Secret
+metadata:
+  name: traefik-ui-tls-cert
+  namespace: dradis-ns
+type: kubernetes.io/tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dradis-service
+  namespace: dradis-ns
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+  selector:
+    app: dradis-app
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dradis-storage-home
+  namespace: dradis-ns
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/dradis/dradis-ce/db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dradis-storage-home
+  namespace: dradis-ns
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dradis-deploy
+  namespace: dradis-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dradis-app
+  template:
+    metadata:
+      labels:
+        app: dradis-app
+    spec:
+      #nodeName: NodeNameHere
+      containers:
+      - name: dradis-deploy
+        image: registrydomainhere/Username/k8s-dradis:6
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+          - name: dradis-persistent-storage-one
+            mountPath: /home/dradis/dradis-ce/db/
+        imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      volumes:
+        - name: dradis-persistent-storage-one
+          persistentVolumeClaim:
+            claimName: dradis-storage-home
+      imagePullSecrets:
+      - name: myregistrykey
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: dradis-ingress-ingress
+  namespace: dradis-ns
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  rules:
+  - host: dradis-ce.domain.com
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: dradis-service
+          servicePort: 3000
+  tls:
+   - secretName: traefik-ui-tls-cert

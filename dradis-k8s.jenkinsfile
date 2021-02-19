@@ -1,0 +1,38 @@
+pipeline {
+  environment {
+    registry = "registrydomainnamehere/username/k8s-dradis"
+    registryPrivate = "https://registrydomainnamehere"
+    registryCredential = 'registrycredentials-saveinjenkins'
+    gitUrl = "https://github.com/dradis/dradis-ce.git"
+    dockerImage = ''
+  }
+  agent any
+  stages {
+    stage('Cloning Git') {
+      steps {
+        git url: gitUrl
+      }
+    }
+    stage('Building image') {
+      steps{
+        script {
+          dockerImage = docker.build(registry + ":$BUILD_NUMBER", "-f dradis-ubuntu-k8s.docker .")
+        }
+      }
+    }
+    stage('Push Image to Artifactory') {
+      steps{
+        script {
+          docker.withRegistry(registryPrivate, registryCredential) {
+            dockerImage.push()
+          }
+        }
+      }
+    }
+    stage('Remove Unused docker image') {
+      steps{
+        sh "docker rmi $registry:$BUILD_NUMBER"
+      }
+    }
+  }
+}
