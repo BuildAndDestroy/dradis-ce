@@ -29,7 +29,3 @@ WORKDIR "/home/dradis/dradis-ce"
 RUN rm -rf /home/dradis/dradis-ce/db
 EXPOSE 3000
 CMD ["/home/dradis/.rbenv/shims/bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
-
-
-
-
